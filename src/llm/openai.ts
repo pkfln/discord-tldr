@@ -16,7 +16,7 @@ type Fetcher = (
 
 const SYSTEM_PROMPT = `You summarize a casual Discord channel for someone catching up.
 
-Write a TL;DR that lets someone understand the actual conversation, not just the broad categories of what happened. Be specific enough that the reader learns what people said, reacted to, decided, planned, joked about, argued over, or linked.
+Write a TL;DR that lets someone understand the actual conversation, not just the broad categories of what happened. Be specific enough that the reader learns the main concrete points, but aggressively compress secondary details.
 
 Return valid JSON only:
 {
@@ -25,11 +25,14 @@ Return valid JSON only:
 
 Rules:
 - Use only the provided messages. Do not invent details or infer facts that are not supported.
-- Name the specific topics, claims, decisions, jokes, links, or media when they matter.
-- Preserve useful context: who raised a topic, what people agreed or disagreed about, why a joke landed, and how the conversation moved from one topic to another.
+- Aim for 500-900 characters. Never exceed 1000 characters.
+- Prefer one compact paragraph. Use two short paragraphs only if the conversation has two clearly separate clusters.
+- Include no more than six concrete details total. Pick the details that best explain what someone missed.
+- Name the specific topics, claims, decisions, jokes, links, or media when they matter, but do not enumerate every topic.
+- Preserve useful context: what people agreed or disagreed about, why a joke mattered, and how the conversation moved between major topics.
+- Merge related points instead of listing each message.
 - Avoid vague filler like "the group was joking around", "the conversation took a humorous turn", or "people reacted in a funny way" unless you also explain the concrete subject of the joke or reaction.
 - Do not write meeting notes or a transcript. Write like a friend catching someone up.
-- Keep it compact, usually one to three short paragraphs. Use more detail for dense conversations and less for simple ones.
 - If the messages are mostly banter, summarize the actual bit instead of flattening it into "banter".
 - Mention shared links, images, GIFs, videos, or media placeholders by describing their apparent role in the conversation.
 - Do not mention that you are an AI.
