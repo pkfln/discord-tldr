@@ -1,6 +1,6 @@
 import { handleTldrCommand } from "./commands/tldr";
 import { loadBotConfig } from "./config";
-import { GroqClient } from "./llm/groq";
+import { LlmClient } from "./llm/openai";
 import { RateLimiter } from "./rateLimit";
 import {
   Client,
@@ -11,7 +11,7 @@ import {
 } from "discord.js";
 
 const config = loadBotConfig();
-const groq = new GroqClient(config);
+const llm = new LlmClient(config);
 const rateLimiter = new RateLimiter(config);
 
 const client = new Client({
@@ -31,7 +31,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName !== "tldr") return;
 
   try {
-    await handleTldrCommand(interaction, { config, groq, rateLimiter });
+    await handleTldrCommand(interaction, { config, llm, rateLimiter });
   } catch (error) {
     console.error("Unhandled interaction error", {
       error: error instanceof Error ? error.message : "unknown error",

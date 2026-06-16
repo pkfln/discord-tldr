@@ -1,12 +1,12 @@
 # discord-tldr
 
-A small Discord bot that adds `/tldr` for summarizing recent channel activity with Groq's OpenAI-compatible chat completions API.
+A small Discord bot that adds `/tldr` for summarizing recent channel activity with an OpenAI-compatible chat completions API.
 
 ## Features
 
 - Bun + strict TypeScript
 - `discord.js` v14
-- Groq model: `llama-3.1-8b-instant`
+- Configurable OpenAI-compatible LLM provider
 - Slash command modes:
   - `since_last_message`: messages after your most recent message in the channel
   - `since_timestamp`: messages after an ISO, Unix, or Discord timestamp
@@ -33,9 +33,30 @@ A small Discord bot that adds `/tldr` for summarizing recent channel activity wi
 9. Open the generated URL and invite the bot to your server.
 10. Copy the application ID into `DISCORD_CLIENT_ID`.
 
-## Groq Setup
+## LLM Setup
 
-Create an API key in the [Groq Console](https://console.groq.com/keys) and set it as `GROQ_API_KEY`.
+Create an API key for an OpenAI-compatible provider and set it as `LLM_API_KEY`.
+
+The default API URL is OpenAI:
+
+```sh
+LLM_API_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+```
+
+For OpenRouter:
+
+```sh
+LLM_API_URL=https://openrouter.ai/api/v1
+LLM_MODEL=openrouter/free
+```
+
+For Groq:
+
+```sh
+LLM_API_URL=https://api.groq.com/openai/v1
+LLM_MODEL=llama-3.1-8b-instant
+```
 
 ## Configuration
 
@@ -50,7 +71,7 @@ Fill in:
 ```sh
 DISCORD_TOKEN=your_bot_token
 DISCORD_CLIENT_ID=your_application_id
-GROQ_API_KEY=your_groq_api_key
+LLM_API_KEY=your_llm_api_key
 ```
 
 Optional limits:
@@ -64,6 +85,9 @@ MAX_SCAN_MESSAGES=500
 MAX_PROMPT_MESSAGES=300
 ADMIN_USER_ID=
 DISCORD_GUILD_ID=
+LLM_API_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+LLM_TEMPERATURE=0.2
 ```
 
 `ADMIN_USER_ID` bypasses per-user limits, but the channel cooldown still protects shared channels from spam.

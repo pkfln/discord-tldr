@@ -2,8 +2,9 @@ export interface Config {
   discordToken: string;
   discordClientId: string;
   discordGuildId: string;
-  groqModel: string;
-  groqTemperature: number;
+  llmApiUrl: string;
+  llmModel: string;
+  llmTemperature: number;
   adminUserId?: string;
   userWindowLimit: number;
   userWindowMs: number;
@@ -16,7 +17,7 @@ export interface Config {
 }
 
 export interface BotConfig extends Config {
-  groqApiKey: string;
+  llmApiKey: string;
 }
 
 export interface RegisterConfig extends Config {
@@ -67,8 +68,9 @@ const loadSharedConfig = (): Config => {
     discordToken: required("DISCORD_TOKEN"),
     discordClientId: optional("DISCORD_CLIENT_ID") ?? "",
     discordGuildId: optional("DISCORD_GUILD_ID") ?? "",
-    groqModel: optional("GROQ_MODEL") ?? "llama-3.1-8b-instant",
-    groqTemperature: floatEnv("GROQ_TEMPERATURE", 0.2),
+    llmApiUrl: optional("LLM_API_URL") ?? "https://api.openai.com/v1",
+    llmModel: optional("LLM_MODEL") ?? "gpt-4o-mini",
+    llmTemperature: floatEnv("LLM_TEMPERATURE", 0.2),
     adminUserId: optional("ADMIN_USER_ID"),
     userWindowLimit: intEnv("USER_RATE_LIMIT", 3),
     userWindowMs: intEnv("USER_RATE_WINDOW_MINUTES", 15) * 60 * 1000,
@@ -84,7 +86,7 @@ const loadSharedConfig = (): Config => {
 export const loadBotConfig = (): BotConfig => {
   return {
     ...loadSharedConfig(),
-    groqApiKey: required("GROQ_API_KEY"),
+    llmApiKey: required("LLM_API_KEY"),
   };
 };
 

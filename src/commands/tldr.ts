@@ -4,7 +4,7 @@ import {
   isHistoryChannel,
   missingPermissions,
 } from "../discord/messages";
-import type { GroqClient } from "../llm/groq";
+import type { LlmClient } from "../llm/openai";
 import type { RateLimiter } from "../rateLimit";
 import { formatRelativeRetry, parseTimestamp } from "../time";
 import type {
@@ -65,7 +65,7 @@ const summaryCache = new Map<string, SummaryCacheEntry>();
 
 interface TldrDependencies {
   config: Config;
-  groq: GroqClient;
+  llm: LlmClient;
   rateLimiter: RateLimiter;
 }
 
@@ -206,7 +206,7 @@ export const handleTldrCommand = async (
   );
 
   try {
-    const summary = await deps.groq.summarize(promptMessages, style);
+    const summary = await deps.llm.summarize(promptMessages);
     const rendered = renderSummary(summary, collection.note);
     summaryCache.set(cacheKey, {
       key: cacheKey,
