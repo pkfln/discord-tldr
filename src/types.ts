@@ -3,8 +3,6 @@ export type TldrMode =
   | "since_timestamp"
   | "last_messages";
 
-export type TldrStyle = "brief" | "detailed";
-
 export interface FormattedMessage {
   id: string;
   authorId: string;

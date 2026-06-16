@@ -11,7 +11,6 @@ import type {
   SummaryCacheEntry,
   SummaryJson,
   TldrMode,
-  TldrStyle,
 } from "../types";
 import {
   MessageFlags,
@@ -43,22 +42,6 @@ export const tldrCommand = new SlashCommandBuilder()
       .setDescription("Number of recent messages for last_messages mode.")
       .setMinValue(10)
       .setMaxValue(300)
-  )
-  .addStringOption((option) =>
-    option
-      .setName("style")
-      .setDescription("Summary style.")
-      .addChoices(
-        { name: "Brief", value: "brief" },
-        { name: "Detailed", value: "detailed" }
-      )
-  )
-  .addBooleanOption((option) =>
-    option
-      .setName("ephemeral")
-      .setDescription(
-        "Whether only you should see the response. Defaults to false."
-      )
   );
 
 const summaryCache = new Map<string, SummaryCacheEntry>();
@@ -76,9 +59,6 @@ export const handleTldrCommand = async (
   const mode =
     (interaction.options.getString("mode") as TldrMode | null) ??
     "since_last_message";
-  const style =
-    (interaction.options.getString("style") as TldrStyle | null) ?? "brief";
-  const ephemeral = interaction.options.getBoolean("ephemeral") ?? false;
   const count =
     mode === "last_messages"
       ? interaction.options.getInteger("count") ?? 100
@@ -148,9 +128,7 @@ export const handleTldrCommand = async (
     return;
   }
 
-  await interaction.deferReply(
-    ephemeral ? { flags: MessageFlags.Ephemeral } : {}
-  );
+  await interaction.deferReply();
 
   const collection = await collectMessages(interaction.channel, {
     mode,
@@ -164,7 +142,6 @@ export const handleTldrCommand = async (
   const cacheKey = buildCacheKey({
     channelId: interaction.channel.id,
     mode,
-    style,
     userId: interaction.user.id,
     timestampMs,
     scopeStartTimestamp: collection.scopeStartTimestamp,
@@ -249,7 +226,6 @@ const buildPromptMessages = (
 const buildCacheKey = (input: {
   channelId: string;
   mode: TldrMode;
-  style: TldrStyle;
   userId: string;
   timestampMs?: number;
   scopeStartTimestamp?: number;
@@ -260,7 +236,6 @@ const buildCacheKey = (input: {
   return [
     input.channelId,
     input.mode,
-    input.style,
     userPart,
     startPart,
     input.count ?? "none",

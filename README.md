@@ -156,13 +156,6 @@ Last 100 messages:
 /tldr mode:last_messages count:100
 ```
 
-Detailed summary:
-
-```text
-/tldr style:detailed
-```
-
-By default, TLDR responses are visible to the channel. Use `ephemeral:true` if you want a private response.
 
 ## Limitations
 
