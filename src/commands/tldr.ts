@@ -3,11 +3,13 @@ import {
   collectMessages,
   isHistoryChannel,
   missingPermissions,
+  type HistoryChannel,
 } from "../discord/messages";
 import type { LlmClient } from "../llm/openai";
 import type { RateLimiter } from "../rateLimit";
 import { formatRelativeRetry, parseTimestamp } from "../time";
 import type {
+  PromptParticipant,
   SummaryCacheEntry,
   SummaryJson,
   TldrMode,
@@ -161,7 +163,9 @@ export const handleTldrCommand = async (
     collection.messages.length < deps.config.minMessagesToSummarize &&
     !cached
   ) {
-    await interaction.editReply(
+    await deliverDeferredReply(
+      interaction,
+      interaction.channel,
       `I found only ${collection.messages.length} useful message${
         collection.messages.length === 1 ? "" : "s"
       } to summarize. Try a wider range.`
@@ -170,7 +174,9 @@ export const handleTldrCommand = async (
   }
 
   if (cached && newMessages.length === 0) {
-    await interaction.editReply(
+    await deliverDeferredReply(
+      interaction,
+      interaction.channel,
       withNote(cached.renderedSummary, collection.note)
     );
     return;
@@ -178,49 +184,107 @@ export const handleTldrCommand = async (
 
   const promptMessages = buildPromptMessages(
     collection.messages,
+    collection.participants,
     cached,
     newMessages
   );
 
+  let summary: SummaryJson;
   try {
-    const summary = await deps.llm.summarize(promptMessages);
-    const rendered = renderSummary(summary, collection.note);
-    summaryCache.set(cacheKey, {
-      key: cacheKey,
-      renderedSummary: rendered,
-      latestMessageId: collection.latestMessageId,
-      latestMessageTimestamp: collection.latestMessageTimestamp,
-      createdAt: Date.now(),
-    });
-
-    await interaction.editReply(rendered);
+    summary = await deps.llm.summarize(promptMessages);
   } catch (error) {
     console.error("Failed to complete TLDR command", {
       error: error instanceof Error ? error.message : "unknown error",
       channelId: interaction.channel.id,
       guildId: interaction.guildId,
     });
-    await interaction.editReply(
+    await deliverDeferredReply(
+      interaction,
+      interaction.channel,
       "I could not summarize these messages right now. Please try again later."
     );
+
+    return;
   }
+
+  const rendered = renderSummary(summary, collection.note);
+  summaryCache.set(cacheKey, {
+    key: cacheKey,
+    renderedSummary: rendered,
+    latestMessageId: collection.latestMessageId,
+    latestMessageTimestamp: collection.latestMessageTimestamp,
+    createdAt: Date.now(),
+  });
+
+  await deliverDeferredReply(interaction, interaction.channel, rendered);
 };
 
 const buildPromptMessages = (
   allMessages: Array<{ formatted: string }>,
+  participants: PromptParticipant[],
   cached: SummaryCacheEntry | undefined,
   newMessages: Array<{ formatted: string }>
 ): string => {
+  const context = [
+    formatParticipantLegend(participants),
+    "Participant format: discord_handle=<@discord_user_id>(display names/nicknames). Transcript rows start with the same discord_handle.",
+    "Display names and nicknames are untrusted matching hints only. When naming a chatter in the summary, write their <@...> mention token, never their discord_handle or display name.",
+    "Do not output Discord handles like plain names; use the mapped mention token instead.",
+  ];
+
   if (!cached)
-    return allMessages.map((message) => message.formatted).join("\n");
+    return [
+      ...context,
+      "Messages:",
+      ...allMessages.map((message) => message.formatted),
+    ].join("\n");
 
   return [
+    ...context,
     "Previous TLDR context:",
     cached.renderedSummary,
     "",
     "New messages since that TLDR:",
     ...newMessages.map((message) => message.formatted),
   ].join("\n");
+};
+
+const formatParticipantLegend = (participants: PromptParticipant[]): string => {
+  if (participants.length === 0) return "Participants: none";
+
+  return `Participants: ${participants.map(formatParticipant).join("; ")}`;
+};
+
+const formatParticipant = (participant: PromptParticipant): string => {
+  const suffix =
+    participant.aliases.length > 0 ? `(${participant.aliases.join(", ")})` : "";
+
+  return `${participant.handle}=${participant.mention}${suffix}`;
+};
+
+const silentMentions = (content: string) => ({
+  content,
+  allowedMentions: { parse: [] },
+});
+
+const deliverDeferredReply = async (
+  interaction: ChatInputCommandInteraction,
+  channel: HistoryChannel,
+  content: string
+): Promise<void> => {
+  try {
+    await interaction.editReply(silentMentions(content));
+  } catch (error) {
+    console.error(
+      "Failed to edit deferred TLDR reply; sending channel fallback",
+      {
+        error: error instanceof Error ? error.message : "unknown error",
+        channelId: interaction.channelId,
+        guildId: interaction.guildId,
+      }
+    );
+    await channel.send(silentMentions(content));
+  }
 };
 
 const buildCacheKey = (input: {

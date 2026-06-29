@@ -92,6 +92,7 @@ LLM_TEMPERATURE=0.2
 
 `ADMIN_USER_ID` bypasses per-user limits, but the channel cooldown still protects shared channels from spam.
 `DISCORD_GUILD_ID` is optional. If set, command registration targets that guild for faster development updates. If omitted, command registration is global and works in any guild where the bot is installed.
+When `NODE_ENV=development`, the bot prints the full LLM request and response to the console. This includes Discord message content and model output, so only use it in trusted debugging environments.
 
 ## Install
 

@@ -10,8 +10,15 @@ export interface FormattedMessage {
   formatted: string;
 }
 
+export interface PromptParticipant {
+  handle: string;
+  mention: string;
+  aliases: string[];
+}
+
 export interface MessageCollectionResult {
   messages: FormattedMessage[];
+  participants: PromptParticipant[];
   note?: string;
   latestMessageId?: string;
   latestMessageTimestamp?: number;

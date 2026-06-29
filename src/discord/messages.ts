@@ -2,6 +2,7 @@ import type { Config } from "../config";
 import type {
   FormattedMessage,
   MessageCollectionResult,
+  PromptParticipant,
   TldrMode,
 } from "../types";
 import {
@@ -14,6 +15,13 @@ import {
 } from "discord.js";
 
 export type HistoryChannel = TextChannel | NewsChannel | ThreadChannel;
+
+interface ParticipantDraft {
+  authorId: string;
+  handle: string;
+  mention: string;
+  aliases: string[];
+}
 
 interface CollectMessagesOptions {
   mode: TldrMode;
@@ -174,11 +182,19 @@ const buildResult = (
   note?: string,
   scopeStartTimestamp?: number
 ): MessageCollectionResult => {
-  const formatted = messages
+  const included = messages
     .filter((message) => shouldIncludeMessage(message, options.botUserId))
     .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
-    .slice(-options.config.maxPromptMessages)
-    .map(formatMessage);
+    .slice(-options.config.maxPromptMessages);
+
+  const participants = buildParticipants(included);
+  const formatted = included.map((message) => {
+    const participant = participants.byAuthorId.get(message.author.id);
+    if (!participant)
+      throw new Error(`Missing prompt participant for ${message.author.id}`);
+
+    return formatMessage(message, participant.handle);
+  });
 
   const latest = formatted.at(-1);
   const cappedNote =
@@ -188,6 +204,7 @@ const buildResult = (
 
   return {
     messages: formatted,
+    participants: participants.list,
     note: [note, cappedNote].filter(Boolean).join(" "),
     latestMessageId: latest?.id,
     latestMessageTimestamp: latest?.createdTimestamp,
@@ -203,17 +220,94 @@ const shouldIncludeMessage = (message: Message, botUserId: string): boolean => {
   return formatMessageBody(message).length > 0;
 };
 
-const formatMessage = (message: Message): FormattedMessage => {
-  const displayName =
-    message.member?.displayName ??
-    message.author.globalName ??
-    message.author.username;
+const formatMessage = (
+  message: Message,
+  authorHandle: string
+): FormattedMessage => {
   return {
     id: message.id,
     authorId: message.author.id,
     createdTimestamp: message.createdTimestamp,
-    formatted: `${displayName}: ${truncate(formatMessageBody(message), 1000)}`,
+    formatted: `${authorHandle}: ${truncate(
+      sanitizeTranscriptText(formatMessageBody(message)),
+      1000
+    )}`,
   };
+};
+
+const buildParticipants = (
+  messages: Message[]
+): {
+  list: PromptParticipant[];
+  byAuthorId: Map<string, PromptParticipant>;
+} => {
+  const draftsByAuthorId = new Map<string, ParticipantDraft>();
+
+  for (const message of messages) {
+    const existing = draftsByAuthorId.get(message.author.id);
+    if (existing) {
+      existing.aliases = mergeAliases(existing.aliases, aliasesFor(message));
+      continue;
+    }
+
+    const handle = sanitizeHandle(message.author.username);
+    if (!handle)
+      throw new Error(
+        `Discord username sanitized to empty: ${message.author.id}`
+      );
+
+    const participant: ParticipantDraft = {
+      authorId: message.author.id,
+      handle,
+      mention: `<@${message.author.id}>`,
+      aliases: aliasesFor(message),
+    };
+    draftsByAuthorId.set(message.author.id, participant);
+  }
+
+  const drafts = Array.from(draftsByAuthorId.values());
+  const entries = drafts.map((participant) => {
+    const promptParticipant: PromptParticipant = {
+      handle: participant.handle,
+      mention: participant.mention,
+      aliases: participant.aliases.filter(
+        (alias) => alias.toLocaleLowerCase() !== participant.handle
+      ),
+    };
+
+    return [participant.authorId, promptParticipant] as const;
+  });
+  const byAuthorId = new Map(entries);
+  const list = entries.map(([, participant]) => participant);
+
+  return { list, byAuthorId };
+};
+
+const aliasesFor = (message: Message): string[] => {
+  const candidates = [message.member?.displayName, message.author.globalName];
+
+  return mergeAliases(
+    [],
+    candidates
+      .filter((value): value is string => Boolean(value))
+      .map(sanitizeAlias)
+      .filter(isUsefulAlias)
+      .slice(0, 3)
+  );
+};
+
+const mergeAliases = (existing: string[], incoming: string[]): string[] => {
+  const seen = new Set(existing.map((alias) => alias.toLocaleLowerCase()));
+  const merged = [...existing];
+
+  for (const alias of incoming) {
+    const key = alias.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(alias);
+  }
+
+  return merged.slice(0, 3);
 };
 
 const formatMessageBody = (message: Message): string => {
@@ -231,6 +325,42 @@ const formatMessageBody = (message: Message): string => {
   }
 
   return parts.join(" ").trim();
+};
+
+const sanitizeTranscriptText = (value: string): string =>
+  value
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+const sanitizeAlias = (value: string): string =>
+  value
+    .normalize("NFKC")
+    .replace(/<@!?\d+>/g, " ")
+    .replace(/[`*_~|\\[\]{}()<>"#:;=/]+/g, " ")
+    .replace(/[^\p{L}\p{N} ._'’-]+/gu, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 32)
+    .trim();
+
+const sanitizeHandle = (value: string): string =>
+  value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9_.]+/g, "")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 32);
+
+const INSTRUCTION_ALIAS_RE =
+  /\b(ignore|disregard|forget|previous|above|system|developer|assistant|prompt|instruction|instructions|rules|role|output|respond|reply|json|markdown|tool|function)\b/i;
+
+const isUsefulAlias = (value: string): boolean => {
+  if (value.length < 2) return false;
+  if (INSTRUCTION_ALIAS_RE.test(value)) return false;
+
+  return /[\p{L}\p{N}]/u.test(value);
 };
 
 const truncate = (value: string, maxLength: number): string => {
